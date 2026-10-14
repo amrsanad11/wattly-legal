@@ -1,1 +1,139 @@
 
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Delete your Wattly account.">
+  <title>Delete Account | Wattly</title>
+  <link rel="stylesheet" href="assets/styles.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Main navigation">
+      <a class="brand" href="./">watt<span>ly</span></a>
+      <div class="nav-links"><a href="privacy-policy.html"><span data-language="en">Privacy policy</span><span data-language="ar">سياسة الخصوصية</span></a><a href="delete-account.html"><span data-language="en">Delete account</span><span data-language="ar">حذف الحساب</span></a><span class="language-switch" aria-label="Language"><button type="button" data-set-language="en">EN</button><button type="button" data-set-language="ar">عربي</button></span></div>
+    </nav>
+  </header>
+  <main class="container">
+    <section class="hero">
+      <div class="eyebrow"><span data-language="en">Account management</span><span data-language="ar">إدارة الحساب</span></div>
+      <h1><span data-language="en">Delete your account</span><span data-language="ar">حذف حسابك</span></h1>
+      <p class="lead"><span data-language="en">Sign in with the Google account you use in Wattly, then request permanent account deletion.</span><span data-language="ar">سجّل الدخول باستخدام حساب Google الذي تستخدمه في Wattly، ثم اطلب حذف الحساب نهائياً.</span></p>
+    </section>
+    <section class="delete-panel" aria-labelledby="delete-title">
+      <h2 id="delete-title"><span data-language="en">Your account</span><span data-language="ar">حسابك</span></h2>
+      <p><span data-language="en">For your protection, Wattly must verify your identity before it can send the deletion request. This action cannot be undone.</span><span data-language="ar">لحمايتك، يجب على Wattly التحقق من هويتك قبل إرسال طلب الحذف. لا يمكن التراجع عن هذا الإجراء.</span></p>
+      <button class="button" id="sign-in" type="button">Continue with Google</button>
+      <p class="signed-in" id="user-details" hidden><span data-language="en">Signed in as</span><span data-language="ar">تم تسجيل الدخول باسم</span> <strong id="user-email"></strong></p>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <div class="actions">
+        <button class="button danger" id="delete-button" type="button" disabled><span data-language="en">Delete my account</span><span data-language="ar">حذف حسابي</span></button>
+        <a class="button secondary" href="./"><span data-language="en">Cancel</span><span data-language="ar">إلغاء</span></a>
+      </div>
+      <p class="meta"><span data-language="en">Deletion removes your Wattly account and associated app data submitted to Wattly, subject to data that must be retained by law or for security. If you need help, contact</span><span data-language="ar">يؤدي الحذف إلى إزالة حساب Wattly وبيانات التطبيق المرتبطة به، مع استثناء البيانات التي يجب الاحتفاظ بها قانونياً أو لأسباب أمنية. للمساعدة، تواصل مع</span> <a href="mailto:amr.sanad.eg@gmail.com">amr.sanad.eg@gmail.com</a>.</p>
+    </section>
+  </main>
+  <footer><div class="container footer-inner"><span>© 2026 Wattly</span><span><a href="privacy-policy.html"><span data-language="en">Privacy policy</span><span data-language="ar">سياسة الخصوصية</span></a> · <a href="tel:+201104615280">01104615280</a></span></div></footer>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: 'AIzaSyBYS4uTuP5EHU4SWvTsKrodEO7mIJInuPE',
+      authDomain: 'wattly-c828f.firebaseapp.com',
+      projectId: 'wattly-c828f',
+      storageBucket: 'wattly-c828f.firebasestorage.app',
+      messagingSenderId: '755002274371',
+      appId: '1:755002274371:web:bb4c139f08d5f3cf191af6',
+      measurementId: 'G-HXMNYVD0D9'
+    };
+    const apiUrl = 'https://api.wattlyapp.store/api/v1/auth/delete_account';
+    const signInButton = document.querySelector('#sign-in');
+    const deleteButton = document.querySelector('#delete-button');
+    const status = document.querySelector('#status');
+    const userDetails = document.querySelector('#user-details');
+    const userEmail = document.querySelector('#user-email');
+    let currentUser = null;
+    let backendAuthenticated = false;
+    const isArabic = () => document.documentElement.lang === 'ar';
+    const text = (en, ar) => isArabic() ? ar : en;
+
+    function showStatus(message, type = 'info') {
+      status.textContent = message;
+      status.className = `status visible ${type}`;
+    }
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    async function loginWithBackend(user) {
+      const token = await user.getIdToken(true);
+      const response = await fetch('https://api.wattlyapp.store/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ id_token: token, fcm_token: '' })
+      });
+      if (!response.ok) throw new Error(`Backend login failed (${response.status})`);
+      backendAuthenticated = true;
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      currentUser = user;
+      if (!user) backendAuthenticated = false;
+      const signedIn = Boolean(user);
+      signInButton.textContent = signedIn ? text('Use a different Google account', 'استخدام حساب Google مختلف') : text('Continue with Google', 'المتابعة باستخدام Google');
+      deleteButton.disabled = !signedIn || !backendAuthenticated;
+      userDetails.hidden = !signedIn;
+      if (user) userEmail.textContent = user.email || 'your Google account';
+    });
+
+    signInButton.addEventListener('click', async () => {
+      signInButton.disabled = true;
+      showStatus(text('Opening Google sign-in…', 'جارٍ فتح تسجيل الدخول عبر Google…'));
+      try {
+        const result = await signInWithPopup(auth, provider);
+        showStatus(text('Signing you in securely…', 'جارٍ تسجيل دخولك بأمان…'));
+        await loginWithBackend(result.user);
+        deleteButton.disabled = false;
+        showStatus(text('You are signed in. Review the warning, then choose “Delete my account”.', 'تم تسجيل دخولك. راجع التحذير ثم اختر «حذف حسابي».'), 'success');
+      } catch (error) {
+        backendAuthenticated = false;
+        if (auth.currentUser) await signOut(auth);
+        if (error.code !== 'auth/popup-closed-by-user') {
+          showStatus(text('Google sign-in could not be completed. Please try again or contact support.', 'تعذر إكمال تسجيل الدخول عبر Google. حاول مرة أخرى أو تواصل مع الدعم.'), 'error');
+        } else {
+          showStatus(text('Sign-in was cancelled.', 'تم إلغاء تسجيل الدخول.'), 'info');
+        }
+      } finally {
+        signInButton.disabled = false;
+      }
+    });
+
+    deleteButton.addEventListener('click', async () => {
+      if (!currentUser || !backendAuthenticated || !window.confirm(text('Delete your Wattly account permanently? This cannot be undone.', 'هل تريد حذف حساب Wattly نهائياً؟ لا يمكن التراجع عن هذا الإجراء.'))) return;
+      deleteButton.disabled = true;
+      signInButton.disabled = true;
+      showStatus(text('Submitting your deletion request…', 'جارٍ إرسال طلب حذف الحساب…'));
+      try {
+        const token = await currentUser.getIdToken(true);
+        const response = await fetch(apiUrl, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
+        });
+        if (!response.ok) throw new Error(`Deletion request failed (${response.status})`);
+        await signOut(auth);
+        showStatus(text('Your account deletion request was completed successfully.', 'تم تنفيذ طلب حذف حسابك بنجاح.'), 'success');
+      } catch (error) {
+        console.error('Wattly account deletion failed:', error);
+        deleteButton.disabled = false;
+        signInButton.disabled = false;
+        showStatus(text('We could not complete the deletion request. Please try again or contact amr.sanad.eg@gmail.com.', 'تعذر تنفيذ طلب الحذف. حاول مرة أخرى أو تواصل مع amr.sanad.eg@gmail.com.'), 'error');
+      }
+    });
+  </script>
+</body>
+</html>
