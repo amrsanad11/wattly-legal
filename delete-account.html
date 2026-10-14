@@ -73,11 +73,16 @@
 
     async function loginWithBackend(user) {
       const token = await user.getIdToken(true);
-      const response = await fetch('https://api.wattlyapp.store/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ id_token: token, fcm_token: '' })
-      });
+      let response;
+      try {
+        response = await fetch('https://api.wattlyapp.store/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ id_token: token, fcm_token: '' })
+        });
+      } catch (error) {
+        throw new Error('BACKEND_NETWORK_ERROR', { cause: error });
+      }
       if (!response.ok) throw new Error(`Backend login failed (${response.status})`);
       backendAuthenticated = true;
     }
@@ -96,18 +101,41 @@
       signInButton.disabled = true;
       showStatus(text('Opening Google sign-in…', 'جارٍ فتح تسجيل الدخول عبر Google…'));
       try {
-        const result = await signInWithPopup(auth, provider);
+        if (window.location.protocol === 'file:') {
+          throw new Error('LOCAL_FILE_ERROR');
+        }
+        let result;
+        try {
+          result = await signInWithPopup(auth, provider);
+        } catch (error) {
+          error.name = 'GOOGLE_SIGN_IN_ERROR';
+          throw error;
+        }
         showStatus(text('Signing you in securely…', 'جارٍ تسجيل دخولك بأمان…'));
-        await loginWithBackend(result.user);
+        try {
+          await loginWithBackend(result.user);
+        } catch (error) {
+          error.name = 'BACKEND_LOGIN_ERROR';
+          throw error;
+        }
         deleteButton.disabled = false;
         showStatus(text('You are signed in. Review the warning, then choose “Delete my account”.', 'تم تسجيل دخولك. راجع التحذير ثم اختر «حذف حسابي».'), 'success');
       } catch (error) {
         backendAuthenticated = false;
         if (auth.currentUser) await signOut(auth);
-        if (error.code !== 'auth/popup-closed-by-user') {
-          showStatus(text('Google sign-in could not be completed. Please try again or contact support.', 'تعذر إكمال تسجيل الدخول عبر Google. حاول مرة أخرى أو تواصل مع الدعم.'), 'error');
-        } else {
+        if (error.message === 'LOCAL_FILE_ERROR') {
+          showStatus(text('Open this page from the published HTTPS website, not as a local file. Google sign-in does not work from file://.', 'افتح هذه الصفحة من موقع HTTPS المنشور، وليس كملف محلي. تسجيل الدخول عبر Google لا يعمل من file://.'), 'error');
+        } else if (error.name === 'BACKEND_NETWORK_ERROR') {
+          showStatus(text('Google sign-in worked, but the backend login request was blocked. Check backend CORS for this website.', 'نجح تسجيل الدخول عبر Google، لكن تم حظر طلب تسجيل الدخول إلى الخادم. تحقق من إعدادات CORS للخادم لهذا الموقع.'), 'error');
+        } else if (error.name === 'BACKEND_LOGIN_ERROR') {
+          showStatus(text('Google sign-in worked, but the backend rejected the login request. Check the id_token and fcm_token API contract.', 'نجح تسجيل الدخول عبر Google، لكن الخادم رفض الطلب. تحقق من عقد API الخاص بـ id_token وfcm_token.'), 'error');
+        } else if (error.code === 'auth/popup-closed-by-user') {
           showStatus(text('Sign-in was cancelled.', 'تم إلغاء تسجيل الدخول.'), 'info');
+        } else if (error.code === 'auth/popup-blocked') {
+          showStatus(text('Your browser blocked the Google sign-in popup. Allow popups for this site and try again.', 'حظر المتصفح نافذة تسجيل الدخول عبر Google. اسمح بالنوافذ المنبثقة لهذا الموقع ثم حاول مرة أخرى.'), 'error');
+        } else {
+          console.error('Wattly Google sign-in failed:', error);
+          showStatus(text(`Google sign-in failed (${error.code || 'unknown error'}). Add this website to Firebase Authorized domains and try again.`, `فشل تسجيل الدخول عبر Google (${error.code || 'خطأ غير معروف'}). أضف هذا الموقع إلى النطاقات المصرح بها في Firebase ثم حاول مرة أخرى.`), 'error');
         }
       } finally {
         signInButton.disabled = false;
